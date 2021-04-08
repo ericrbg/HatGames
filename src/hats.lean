@@ -52,7 +52,10 @@ An arrangement of hats is just the any function from `α` to all possible hats.
 -/
 def hat_arr (α : Type*) (n : ℕ) := α → fin n
 
-@[simp] lemma hat_arr_is_fn (α : Type*) (n : ℕ) : hat_arr α n = (α → fin n) := rfl
+/--
+`simp` doesn't like unfolding `hat_arr` automatically :(
+-/
+@[simp] lemma hat_arr_def (α : Type*) (n : ℕ) : hat_arr α n = (α → fin n) := rfl
 
 /--
 A hat-guessing function is a function that takes in a vertex, and an arrangement of hats, and
@@ -62,7 +65,7 @@ of vertices that are adjacent to it, and it must also guess correctly on at leas
 structure hat_guessing_function (n : ℕ) :=
 (f : α → hat_arr α (n+1) → fin (n+1))
 (f_local: ∀ a b : α, ¬G.adj a b → ∀ arr : hat_arr α (n+1), ∀ k : fin (n+1),
-  f a arr = f a (λ x, ite (x = b) k (arr x)))
+  f a arr = f a (λ x, if x = b then k else arr x))
 (f_guesses: ∀ arr : hat_arr α (n+1), ∃ a : α, f a arr = arr a)
 
 section basic
@@ -77,20 +80,18 @@ def all_guess_one [nonempty α] : hat_guessing_function G 0 :=
   f_guesses := λ _, by simp
 }
 
-lemma only_two_mod_two : ∀ {a b : fin 2}, a ≠ b → 1 - a = b := dec_trivial
-
 /--
 On a graph with an edge, you can guess 2 colours. The strategy is to take the two vertices, and
 one vertex guesses that they are the same colour, whilst the other vertex guesses they aren't.
 -/
 def edge_guesses_two (v w : α) (h : G.adj v w) : hat_guessing_function G 1 :=
 {
-  f := λ x arr, ite (x = v) (arr w) (ite (x = w) (1 - arr v) 1),
+  f := λ x arr, if x = v then arr w else (if x = w then 1 - arr v else 1),
   f_local := by {intros, split_ifs; subst_vars; solve_by_elim},
   f_guesses := λ arr, by begin
     by_cases are_eq : (arr v = arr w), --split-ifs doesn't work with binders
       { use v, simp [are_eq] },
-      { use w, simp [←G.ne_of_adj h, only_two_mod_two are_eq] }
+      { use w, simp [←G.ne_of_adj h, (dec_trivial : ∀ {a b : fin 2}, a ≠ b → 1 - a = b) are_eq] }
   end
 }
 
@@ -151,6 +152,9 @@ Size of a `hat_arr α n` is the same as the standard size of a function from one
 -/
 lemma size_arr {n : ℕ} : ‖hat_arr α n‖ = n ^ ‖α‖ := by simp
 
+/--
+Auxillary lemmata for `max_guess_lt_card_verts`.
+-/
 lemma size_univ_larger (k : ℕ) : k * (k + 1) ^ (k - 1) < (k + 1) ^ k :=
 begin
   cases k with k, simp only [nat.succ_pos', one_pow, zero_mul],
@@ -167,7 +171,7 @@ For `k` vertices on a graph, you can never guess `k+1` colours. We prove this us
 simple properties of cardinality, and is essentially a reduction of the case on a
 complete graph to all other possible graphs.
 -/
-theorem not_too_good : hat_guessing_function G ‖α‖ → false
+theorem best_guess_le_card_verts : hat_guessing_function G ‖α‖ → false
 := begin
   intro hg, let n := ‖α‖,
   let guessed_at := λ a, univ.filter (λ arr, hg.f a arr = arr a),
@@ -184,7 +188,7 @@ theorem not_too_good : hat_guessing_function G ‖α‖ → false
       { rintros _ -, rw ←all_are_guessed, apply mem_univ },
 
     have bUnion_small : |univ.bUnion guessed_at| ≤ n * (n + 1) ^ (n - 1),
-    { suffices : ∑ (a : α), |guessed_at a| ≤ n * (n + 1) ^ (n - 1),
+    { suffices : ∑ a : α, |guessed_at a| ≤ n * (n + 1) ^ (n - 1),
         apply le_trans, apply card_bUnion_le, exact this,
       apply le_trans, apply sum_le_sum,
         { rintros x -, exact small_guesses x },
@@ -198,7 +202,7 @@ theorem not_too_good : hat_guessing_function G ‖α‖ → false
 
   intro a,
 
-  let modify_arr := λ arr : hat_arr α (n+1), λ k, (λ (x : α), ite (x = a) k (arr x)),
+  let modify_arr := λ arr : hat_arr α (n+1), λ k, (λ (x : α), if x = a then k else arr x),
 
   let similar_arrs : hat_arr α (n+1) → finset (hat_arr α (n+1)) :=
     λ arr, finset.map (⟨modify_arr arr, _⟩) (fin_range (n + 1)),
@@ -261,14 +265,14 @@ def complete_guess : hat_guessing_function (complete_graph (fin (n+1))) n :=
   f_local := λ a b a_ne_b arr _, by begin
     change ¬a ≠ b at a_ne_b, push_neg at a_ne_b, subst a_ne_b, rw sub_right_inj,
     rw sum_ite,
-    have h : filter (λ (x : fin (n + 1)), x = a) (fin_range (n + 1) \ {a}) = ∅ := by {ext, simp},
-    have h' : filter (λ (x : fin (n + 1)), ¬x = a) (fin_range (n + 1) \ {a}) =
-      fin_range (n + 1) \ {a} := by {ext, simp},
+    have h : filter (λ x, x = a) (fin_range (n + 1) \ {a}) = ∅, by {ext, simp},
+    have h' : filter (λ x, ¬x = a) (fin_range (n + 1) \ {a}) = fin_range (n + 1) \ {a},
+      by {ext, simp},
     simp [h, h']
   end,
   f_guesses := λ arr, by begin
-    let s := ∑ (x : fin (n + 1)) in fin_range (n + 1), arr x, use s,
-    suffices : s = ∑ (x : fin (n + 1)) in fin_range (n + 1) \ {s}, arr x + arr s,
+    let s := ∑ x in fin_range (n + 1), arr x, use s,
+    suffices : s = ∑ x in fin_range (n + 1) \ {s}, arr x + arr s,
       nth_rewrite 0 this, ring,
     have : _ = arr s := sum_singleton,
     rw [←this, sum_sdiff], simp
