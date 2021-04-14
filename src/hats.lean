@@ -50,7 +50,7 @@ variables {α : Type*} (G : simple_graph α) [decidable_eq α]
 /--
 An arrangement of hats is just the any function from `α` to all possible hats.
 -/
-def hat_arr (α : Type*) (n : ℕ) := α → fin n
+abbreviation hat_arr (α : Type*) (n : ℕ) := α → fin n
 
 /--
 `simp` doesn't like unfolding `hat_arr` automatically :(
@@ -68,51 +68,28 @@ structure hat_guessing_function (n : ℕ) :=
   f a arr = f a (λ x, if x = b then k else arr x))
 (f_guesses: ∀ arr : hat_arr α n, ∃ a : α, f a arr = arr a)
 
-/--
-The hat-guessing number is the largest possible `n` such that we can guess `n` colours on `G`.
--/
-noncomputable def hat_guessing_number :=
-  ⨆ (n : ℕ) (hn : nonempty (hat_guessing_function G n)), (n : enat)
-
-/--
-Any specific hat-guessing function is a lower-bound on the `hat_guessing_number`.
--/
-lemma function_is_lb {G : simple_graph α} {n : ℕ} (hg : hat_guessing_function G n)
-  : ↑n <= hat_guessing_number G := le_supr_of_le n $ le_supr_of_le ⟨hg⟩ $ le_refl _
-
 section basic
 
 /--
 On an nonempty graph, you can trivially guess 1 colour.
 -/
 def inhabited_guesser [nonempty α] : hat_guessing_function G 1 :=
-{
-  f := λ _ _, 1,
+{ f := λ _ _, 1,
   f_local := λ _ _ _ _ _, rfl,
-  f_guesses := λ _, by simp
-}
-
-lemma inhabited_guesses_one [nonempty α] : ↑1 ≤ hat_guessing_number G
-  := function_is_lb $ inhabited_guesser G
+  f_guesses := λ _, by simp }
 
 /--
 On a graph with an edge, you can guess 2 colours. The strategy is to take the two vertices, and
 one vertex guesses that they are the same colour, whilst the other vertex guesses they aren't.
 -/
 def edge_guesser (v w : α) (h : G.adj v w) : hat_guessing_function G 2 :=
-{
-  f := λ x arr, if x = v then arr w else (if x = w then 1 - arr v else 1),
-  f_local := by {intros, split_ifs; subst_vars; solve_by_elim},
+{ f := λ x arr, if x = v then arr w else (if x = w then 1 - arr v else 1),
+  f_local := by {intros, split_ifs; subst_vars; tauto},
   f_guesses := λ arr, by begin
     by_cases are_eq : (arr v = arr w), --split-ifs doesn't work with binders
       { use v, simp [are_eq] },
       { use w, simp [←G.ne_of_adj h, (dec_trivial : ∀ {a b : fin 2}, a ≠ b → 1 - a = b) are_eq] }
-  end
-}
-
-lemma edge_guesses_two (v w : α) (h : G.adj v w)
-  : ↑2 ≤ hat_guessing_number G := function_is_lb $ edge_guesser G v w h
-
+  end }
 
 /--
 If you have a `hat_guessing_function G (n + 1)`, then you can actually make simpler strategies
@@ -144,11 +121,9 @@ strategy of `G` on `H` to guess the same amount of colours.
 -/
 def simple_subgraph {n : ℕ} (hg : hat_guessing_function G n) (H : simple_graph α)
   (h : ∀ a b : α, G.adj a b → H.adj a b) : hat_guessing_function H n :=
-{
-  f := hg.f,
+{ f := hg.f,
   f_local := λ a b nadj, hg.f_local a b $ mt (h a b) nadj,
-  f_guesses := hg.f_guesses
-}
+  f_guesses := hg.f_guesses }
 
 end basic
 
@@ -162,8 +137,6 @@ instance (n : ℕ) : fintype (hat_arr α n) := pi.fintype
 
 local notation `|` x `|` := finset.card x
 local notation `‖` x `‖` := fintype.card x
-
---prefix `𝓗`:10000 := hat_guessing_number
 
 /--
 Size of a `hat_arr α n` is the same as the standard size of a function from one set to another.
@@ -189,7 +162,7 @@ For `k` vertices on a graph, you can never guess `k+1` colours. We prove this us
 simple properties of cardinality, and is essentially a reduction of the case on a
 complete graph to all other possible graphs.
 -/
-theorem best_guess_le_card_verts : hat_guessing_function G (‖α‖+1) → false := begin
+theorem best_guess_le_card_verts : hat_guessing_function G (‖α‖ + 1) → false := begin
   intro hg, let n := ‖α‖,
   let guessed_at := λ a, univ.filter (λ arr, hg.f a arr = arr a),
 
@@ -219,9 +192,9 @@ theorem best_guess_le_card_verts : hat_guessing_function G (‖α‖+1) → fals
 
   intro a,
 
-  let modify_arr := λ arr : hat_arr α (n+1), λ k, (λ (x : α), if x = a then k else arr x),
+  let modify_arr := λ arr : hat_arr α (n + 1), λ k, (λ (x : α), if x = a then k else arr x),
 
-  let similar_arrs : hat_arr α (n+1) → finset (hat_arr α (n+1)) :=
+  let similar_arrs : hat_arr α (n + 1) → finset (hat_arr α (n + 1)) :=
     λ arr, finset.map (⟨modify_arr arr, _⟩) (fin_range (n + 1)),
     -- `finset.map` requires an embedding, which gives _very_ nice cardinality results
     -- (clearly useful for us!) but we must prove that `modify_arr arr` is injective
@@ -276,9 +249,8 @@ Complete graphs on `n+1` vertices have guessing strategies that guess `n+1` colo
 natural extension of the 2-player result; a vertex `k` guesses that the sum of all hat colours in
 the arrangement, mod `n+1`, is `k`, and it must be that one of them is right.
 -/
-def complete_guess : hat_guessing_function (complete_graph (fin (n+1))) (n+1) :=
-{
-  f := λ k arr, k - ∑ x in fin_range(n + 1) \ {k}, arr x,
+def complete_guess : hat_guessing_function (complete_graph (fin (n + 1))) (n + 1) :=
+{ f := λ k arr, k - ∑ x in fin_range(n + 1) \ {k}, arr x,
   f_local := λ a b a_eq_b arr _, by begin
     change ¬a ≠ b at a_eq_b, push_neg at a_eq_b, subst a_eq_b,
     rw [sub_right_inj, sum_ite],
@@ -292,7 +264,6 @@ def complete_guess : hat_guessing_function (complete_graph (fin (n+1))) (n+1) :=
     suffices : s = ∑ x in fin_range (n + 1) \ {s}, arr x + arr s,
       nth_rewrite 0 this, ring,
     rw [←(sum_singleton : _ = arr s), sum_sdiff], simp
-  end
-}
+  end }
 
 end complete
