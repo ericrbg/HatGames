@@ -290,13 +290,9 @@ begin
     -- but this code may as well be auto-generated
     let n := ∑ (m : γ), (ite ((b.fst, m) = b) k (arr (b.fst, m))).fst, rw lex_adj at nadj,
     convert hg.f_local v b.1 (by tauto) (λ (x : α), ∑ (m : γ), (arr (x, m)).fst) n,
-    -- we now deal with the `ite`s being slightly different
-    { funext, split_ifs with h, {subst h},
-      suffices : ∀ m, (x, m) ≠ b, by simp [this],
-      intros _ h', apply h, rw ←h' },
-
-    -- the second half is proved from the lexicographic relations
-    rw sum_apply_ite_of_false, finish
+    funext, split_ifs with h, {subst h},
+    -- the rest comes from the lexicographic relations
+    all_goals { rw sum_apply_ite_of_false, finish }
 end
 
 lemma guess_γ_local [add_comm_group γ] (a b : α × γ)
