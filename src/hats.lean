@@ -229,23 +229,20 @@ section complete
 
 open finset
 
-variable (n : ℕ)
-
 /--
-Complete graphs on `n+1` vertices have guessing strategies that guess `n+1` colours. This is a
-natural extension of the 2-player result; a vertex `k` guesses that the sum of all hat colours in
-the arrangement, mod `n+1`, is `k`, and it must be that one of them is right.
+Finite complete graphs on `α` have guessing strategies that guess `α` colours. This is a
+natural extension of the 2-player result to any finite commutative group.
 -/
-def complete_guess : hat_guessing_function (complete_graph (fin (n + 1))) (fin (n + 1)) :=
-{ f := λ k arr, k - ∑ x in fin_range(n + 1) \ {k}, arr x,
+def complete_guess [fintype α] [add_comm_group α] : hat_guessing_function (complete_graph α) α :=
+{ f := λ k arr, k - ∑ x in univ \ {k}, arr x,
   f_local := λ a b a_eq_b arr _, by begin
     change ¬a ≠ b at a_eq_b, push_neg at a_eq_b, subst a_eq_b,
     simp [sub_right_inj, sum_ite_of_false]
   end,
   f_guesses := λ arr, by begin
-    let s := ∑ x in fin_range (n + 1), arr x, use s,
-    suffices : s = ∑ x in fin_range (n + 1) \ {s}, arr x + arr s,
-      nth_rewrite 0 this, ring,
+    let s := ∑ x in univ, arr x, use s,
+    suffices : s = ∑ x in univ \ {s}, arr x + arr s,
+      nth_rewrite 0 this, simp,
     rw [←(show _ = arr s, from sum_singleton), sum_sdiff], simp
   end }
 
