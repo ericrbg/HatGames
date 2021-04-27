@@ -7,7 +7,6 @@ import data.finset
 import tactic
 import tactic.rewrite_search.frontend
 import .constructions
-import .shim
 
 open_locale big_operators
 
@@ -40,9 +39,8 @@ variables {α : Type*} (G : simple_graph α) [decidable_eq α]
 A hat-guessing function is a function that takes in a vertex, and an arrangement of hats, and
 tries to guess its own vertex. It must fit two conditions: first, it can only depend on the values
 of vertices that are adjacent to it, and it must also guess correctly on at least one vertex.
-(This isn't inhabited for many, many G, β!!)
 -/
-@[nolint has_inhabited_instance]
+@[nolint has_inhabited_instance] -- this whole file is dedicated to whether G, β instances exist!
 structure hat_guessing_function (β : Type*) :=
 (f : α → (α → β) → β)
 (f_local: ∀ a b : α, ¬G.adj a b → ∀ arr : (α → β), ∀ k : β,
