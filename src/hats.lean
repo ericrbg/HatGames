@@ -5,7 +5,6 @@ import combinatorics.simple_graph.basic
 import algebra.big_operators.basic
 import data.finset
 import tactic
-import tactic.rewrite_search.frontend
 import .constructions
 
 open_locale big_operators
@@ -87,7 +86,7 @@ def inhabited_guesser [nonempty α] : hat_guessing_function G unit :=
 On a graph with an edge, you can guess 2 colours. The strategy is to take the two vertices, and
 one vertex guesses that they are the same colour, whilst the other vertex guesses they aren't.
 -/
-def edge_guesser (v w : α) (t : G.adj v w) : hat_guessing_function G bool :=
+def edge_guesser {v w : α} (t : G.adj v w) : hat_guessing_function G bool :=
 { f := λ x arr, if v = x then arr w else (if w = x then !(arr v) else ff),
   f_local := by {intros, split_ifs; subst_vars; tauto},
   f_guesses := λ arr, by begin
@@ -116,20 +115,25 @@ section finite
 
 open finset
 
-variable [fintype α]
-
 local notation `|` x `|` := finset.card x
 local notation `‖` x `‖` := fintype.card x
 
--- if this stops building, check PR #7136
--- replacement should be fintype.equiv_of_card_eq
 /--
-If two `fintype`s have the same card, and we can guess on one, we can guess on the other. However,
-this is non-computable as the isomorphism isn't unique, and so we need to choose one.
+If two β, γ have equal cardinality, and we have an `hat_guessing_function G β`, then there exists
+a `hat_guessing_function G γ`; however, we cannot computably extract it.
 -/
-noncomputable def equal_cards_guess (hg : hat_guessing_function G α) (β) [fintype β] (h : ‖α‖ = ‖β‖)
-  : hat_guessing_function G β :=
-  guesser_of_equiv hg (fintype.nonempty_equiv_of_card_eq h).some
+lemma exists_equal_cards_guess {β γ} [fintype β] [fintype γ] (h : ‖β‖ = ‖γ‖)
+  (hg : hat_guessing_function G β) : nonempty (hat_guessing_function G γ) :=
+⟨guesser_of_equiv hg (fintype.equiv_of_card_eq h)⟩
+
+/--
+The non-computable equivalent to the above statement.
+-/
+noncomputable def equal_cards_guess {β γ} [fintype β] [fintype γ] (h : ‖β‖ = ‖γ‖)
+  (hg : hat_guessing_function G β) : hat_guessing_function G γ :=
+(exists_equal_cards_guess h hg).some
+
+variable [fintype α]
 
 /-- Auxillary lemmata for `max_guess_lt_card_verts`. -/
 lemma size_univ_larger (k : ℕ) : k * (k + 1) ^ (k - 1) < (k + 1) ^ k :=
@@ -278,7 +282,7 @@ lemma guess_β_local [add_comm_group β] (a b : α × γ)
   (nadj : ¬(G · γ).adj a b) (arr : α × γ → β × γ) (k : β × γ) :
   guess_β hg a arr = guess_β hg a (λ x, if x = b then k else arr x) :=
 begin
-  unfold guess_β, obtain ⟨v, a⟩ := a, congr' 1; dsimp only, -- remove after! (I think)
+  unfold guess_β, obtain ⟨v, a⟩ := a, congr' 1;
 
     -- compile-driven maths; this happens to fit the locality requirement!
     -- I assume this is what the colour in our fake arrangement "really is"
@@ -287,13 +291,13 @@ begin
     convert hg.f_local v b.1 (by tauto) (λ (x : α), ∑ (m : γ), (arr (x, m)).fst) n,
     funext, split_ifs with h, {subst h},
     -- the rest comes from the lexicographic relations
-    all_goals { rw sum_apply_ite_of_false, finish }
+    all_goals { rw sum_apply_ite_of_false, tidy }
 end
 
 lemma guess_γ_local [add_comm_group γ] (a b : α × γ)
   (h : ¬(G · γ).adj a b) (arr : α × γ → β × γ) (k : β × γ) :
   guess_γ a arr = guess_γ a (λ x, ite (x = b) k (arr x)) :=
-by { unfold guess_γ, congr' 2, rw sum_apply_ite_of_false, finish }
+by { unfold guess_γ, congr' 2, rw sum_apply_ite_of_false, tidy }
 
 /-- Lemma 1 in the Gadouleau paper, generalised to guessing types.  -/
 def blow_up [add_comm_group β] [add_comm_group γ]
