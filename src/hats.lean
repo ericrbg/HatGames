@@ -1,10 +1,6 @@
-import data.set.finite
-import data.nat.basic
-import data.zmod.basic -- only needed because it makes `ring` work better?!
 import combinatorics.simple_graph.basic
-import algebra.big_operators.basic
-import data.finset
-import tactic
+import algebra.big_operators.order
+import data.fintype.card
 import .constructions
 
 open_locale big_operators

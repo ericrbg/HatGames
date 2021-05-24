@@ -1,7 +1,5 @@
 import data.nat.basic
 import combinatorics.simple_graph.basic
-import algebra.big_operators.basic
-import tactic
 
 variables {α β : Type*} (G : simple_graph α)
 
