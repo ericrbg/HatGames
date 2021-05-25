@@ -2,6 +2,7 @@ import combinatorics.simple_graph.basic
 import algebra.big_operators.order
 import data.fintype.card
 import .constructions
+import tactic.ring_exp
 
 open_locale big_operators
 
@@ -53,10 +54,10 @@ def guesser_of_rinverse {β γ} {G : simple_graph α} (hg : hat_guessing_functio
 { f := λ a arr, f $ hg.f a $ g ∘ arr,
   f_local := begin
     intros a b nadj_a_b arr k, congr' 1,
-    rw hg.f_local a b nadj_a_b (g ∘ arr) (g k),
+    rw hg.f_local _ _ nadj_a_b _ _,
     congr' 1, ext, split_ifs with h; simp [h]
   end,
-  f_guesses := λ arr, by {obtain ⟨a, ha⟩ := hg.f_guesses (g ∘ arr), use a, rw [ha, hf]} }
+  f_guesses := λ arr, let ⟨a, ha⟩ := hg.f_guesses (g ∘ arr) in ⟨a, by rw [ha, hf]⟩ }
 
 /--
 We replace the right-inverse requirement with a surjection. With axiom of choice, being surjective
@@ -134,13 +135,17 @@ variable [fintype α]
 /-- Auxillary lemmata for `max_guess_lt_card_verts`. -/
 lemma size_univ_larger (k : ℕ) : k * (k + 1) ^ (k - 1) < (k + 1) ^ k :=
 begin
-  cases k with k, {norm_num},
-  ring_exp, simp [mul_two, pos_iff_ne_zero, pow_ne_zero]
+  cases k,
+  {norm_num},
+  ring_exp,
+  simp [mul_two, pos_iff_ne_zero, pow_ne_zero]
 end
 
-lemma cancel_pow (k n : ℕ) : k * (n + 1) ≤ (n + 1) ^ n → k ≤ (n + 1) ^ (n - 1) :=
+lemma cancel_pow {k n : ℕ} : k * (n + 1) ≤ (n + 1) ^ n → k ≤ (n + 1) ^ (n - 1) :=
 begin
-  cases n, {norm_num}, intro ineq, rw pow_succ' at ineq, simp * at *
+  cases n,
+  {norm_num},
+  simp [pow_succ']
 end
 
 /--
@@ -149,76 +154,98 @@ simple properties of cardinality, and is essentially a reduction of the case on 
 complete graph to all other possible graphs.
 -/
 theorem best_guess_le_card_verts : hat_guessing_function G (option α) → false := begin
-  intro hg, let n := ‖α‖,
+  intro hg,
   let guessed_at := λ a, univ.filter (λ arr, hg.f a arr = arr a),
 
-  have univ_large : |(univ : finset (α → option α))| = (n + 1) ^ n, by simp [card_univ],
-
-  suffices small_guesses : ∀ a : α, |guessed_at a| ≤ (n + 1) ^ (n - 1),
+  have univ_large : |(univ : finset (α → option α))| = (‖α‖ + 1) ^ ‖α‖, by simp [card_univ],
+  -- the approach we take here is to show that individual vertices can guess "relatively few"
+  -- configurations, but `univ` (the total number of configurations) is larger than that
+  suffices small_guesses : ∀ a : α, |guessed_at a| ≤ (‖α‖ + 1) ^ (‖α‖ - 1),
   { let all_guessed := univ.filter (λ arr, ∃ a : α, hg.f a arr = arr a),
 
     have all_are_guessed : univ = all_guessed,
-      ext arr, simpa using hg.f_guesses arr,
+      ext arr,
+      simpa using hg.f_guesses arr,
+
+    -- `univ.bUnion guessed_at` is our key object. this is the union over all vertices of what is
+    -- guessed at that specific vertex, and for a winning hg-function, this needs to be all of them.
     have bUnion_guessed_at_eq_guessed : all_guessed = univ.bUnion guessed_at,
       apply subset.antisymm,
       { intros arr arr_guessed,
         simpa using hg.f_guesses arr },
       { rintros _ -, rw ←all_are_guessed, apply mem_univ },
 
-    have bUnion_small : |univ.bUnion guessed_at| ≤ n * (n + 1) ^ (n - 1),
-    { suffices : ∑ a : α, |guessed_at a| ≤ n * (n + 1) ^ (n - 1),
-        apply le_trans, apply card_bUnion_le, exact this,
-      apply le_trans, apply sum_le_sum,
-        { rintros x -, exact small_guesses x },
-      -- `card_univ` feels like a simp lemma
+    -- we get a contradiction based on this; if there was a HG function, every config would work,
+    -- but each individual vertex can only guess so many, and indeed not enough;
+    -- then there's no hope of us ever guessing all of the vertices
+
+    -- TODO: turn this into a `calc` block!
+    have bUnion_small : |univ.bUnion guessed_at| ≤ ‖α‖ * (‖α‖ + 1) ^ (‖α‖ - 1),
+    { suffices : ∑ a : α, |guessed_at a| ≤ ‖α‖ * (‖α‖ + 1) ^ (‖α‖ - 1),
+      { transitivity,
+      apply card_bUnion_le,
+      exact this },
+      transitivity,
+      apply sum_le_sum (λ x _, small_guesses x),
       simp [card_univ] },
 
     rw [all_are_guessed, bUnion_guessed_at_eq_guessed] at univ_large,
     rw univ_large at bUnion_small,
-    have := size_univ_larger n, linarith },
+    have := size_univ_larger (‖α‖), -- unsure why parser wants brackets
+    linarith },
 
+  -- now we need to show that all vertices guess a smaller proportion than you'd expect. the main
+  -- idea is that a vertex can't see itself (at least), so any pair of configurations that
+  -- are different only on themselves can't be distinguished by the hat guessing function.
+  -- we model this phenomenon with `similar_arrs`, which is the equivalence class of
+  -- vertices under this relation.
   intro a,
-
   let modify_arr := λ arr : α → option α, λ k, (λ x : α, if x = a then k else arr x),
-
   let similar_arrs := λ arr, finset.map (⟨modify_arr arr, _⟩) (univ), swap,
     -- `finset.map` requires an embedding, which gives _very_ nice cardinality results
     -- (clearly useful for us!) but we must prove that `modify_arr arr` is injective
-    { intros x y fx_eq_fy, rw function.funext_iff at fx_eq_fy, specialize fx_eq_fy a,
-      simp_rw [modify_arr] at fx_eq_fy, simp only [if_true, eq_self_iff_true] at fx_eq_fy,
-      assumption }, -- you _can't_ combine `simp` and `simp_rw` here for some reason
+    { intros x y fx_eq_fy,
+      rw function.funext_iff at fx_eq_fy,
+      specialize fx_eq_fy a,
+      simp_rw modify_arr at fx_eq_fy,  -- you _can't_ combine both these lines for some reason
+      simp only [if_true, eq_self_iff_true] at fx_eq_fy,
+      assumption },
 
-  have at_most_similar : |guessed_at a| * (n + 1) ≤ |(guessed_at a).bUnion similar_arrs|,
+  have at_most_similar : |guessed_at a| * (‖α‖ + 1) ≤ |(guessed_at a).bUnion similar_arrs|,
     { rw card_bUnion, simp [card_univ],
     -- `card_bUnion` requires disjointness for equality, which is proved below
     intros arr1 arr1guessed arr2 arr2guessed arr1_ne_arr2,
-    rw disjoint_iff_ne, intros arr3 arr3_sim_arr1 arr4 arr4_sim_arr2,
+    rw disjoint_iff_ne,
+    intros arr3 arr3_sim_arr1 arr4 arr4_sim_arr2,
     -- our approach is to show that if arr1 ≠ arr2, then they have to be different in a
     -- non-`a` variable, therefore meaning that disjointness holds
     simp only [similar_arrs, if_true, eq_self_iff_true, function.embedding.coe_fn_mk,
-      mem_map, mem_fin_range, exists_true_left] at arr3_sim_arr1 arr4_sim_arr2,
+               mem_map, mem_fin_range, exists_true_left] at arr3_sim_arr1 arr4_sim_arr2,
     obtain ⟨k, -, arr3_sim_arr1⟩ := arr3_sim_arr1,
     obtain ⟨m, -, arr4_sim_arr2⟩ := arr4_sim_arr2,
-    simp only [modify_arr] at arr3_sim_arr1 arr4_sim_arr2,
+    simp_rw [modify_arr] at arr3_sim_arr1 arr4_sim_arr2,
 
     -- If two colourings are the same except at non-connected vertices, and they guess,
-    -- then they must be equal. (TODO: May be worth extracting this, it's a useful proof)
+    -- then they must be equal. (TODO: May be worth extracting this, it's a useful proof!)
     contrapose! arr1_ne_arr2 with arr3_eq_arr4, funext x,
-    have hg_local := hg.f_local a a (G.loopless a),
-    substs arr3_eq_arr4 arr4_sim_arr2, rename arr3_sim_arr1 → arr1_sim_arr2,
-    rw [function.funext_iff] at arr1_sim_arr2, funext x,
+    have hg_local := hg.f_local _ _ (G.loopless a),
+    substs arr3_eq_arr4 arr4_sim_arr2,
+    rename arr3_sim_arr1 → arr1_sim_arr2,
+    rw [function.funext_iff] at arr1_sim_arr2,
+    funext x,
 
-    by_cases h : x = a, -- `split-ifs` would be nice, but throws away too much information
-    { subst h,
-      simp only [true_and, mem_filter, mem_univ] at arr1guessed arr2guessed,
+    obtain rfl | h := em (x = a), -- `split-ifs` would be nice, but throws away too much information
+    { simp only [true_and, mem_filter, mem_univ] at arr1guessed arr2guessed,
       rw [←arr1guessed, ←arr2guessed, hg_local arr1 k, hg_local arr2 m],
-      simp_rw λ x, arr1_sim_arr2 x },
-    specialize arr1_sim_arr2 x, simp only [h, if_false] at arr1_sim_arr2, exact arr1_sim_arr2 },
+      simp_rw λ t, arr1_sim_arr2 t },
+    specialize arr1_sim_arr2 x,
+    simp only [h, if_false] at arr1_sim_arr2,
+    exact arr1_sim_arr2 },
 
-have less_than_card_univ : |(guessed_at a).bUnion similar_arrs| ≤ (n + 1) ^ n,
-  rw [←univ_large, card_univ], exact card_le_univ _,
+  have less_than_card_univ : |(guessed_at a).bUnion similar_arrs| ≤ (‖α‖ + 1) ^ ‖α‖,
+    by simpa only [←univ_large, card_univ] using card_le_univ _,
 
-apply cancel_pow, exact le_trans at_most_similar less_than_card_univ
+  exact (cancel_pow $ (at_most_similar).trans less_than_card_univ),
 end
 
 end finite
