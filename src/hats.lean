@@ -179,15 +179,10 @@ theorem best_guess_le_card_verts : hat_guessing_function G (option α) → false
     -- but each individual vertex can only guess so many, and indeed not enough;
     -- then there's no hope of us ever guessing all of the vertices
 
-    -- TODO: turn this into a `calc` block!
-    have bUnion_small : |univ.bUnion guessed_at| ≤ ‖α‖ * (‖α‖ + 1) ^ (‖α‖ - 1),
-    { suffices : ∑ a : α, |guessed_at a| ≤ ‖α‖ * (‖α‖ + 1) ^ (‖α‖ - 1),
-      { transitivity,
-      apply card_bUnion_le,
-      exact this },
-      transitivity,
-      apply sum_le_sum (λ x _, small_guesses x),
-      simp [card_univ] },
+    have bUnion_small : |univ.bUnion guessed_at| ≤ ‖α‖ * (‖α‖ + 1) ^ (‖α‖ - 1) :=
+    calc |univ.bUnion guessed_at| ≤ ∑ a, |guessed_at a| : card_bUnion_le
+         ... ≤ ∑ a, (λ _, (‖α‖ + 1) ^ (‖α‖ - 1)) a : sum_le_sum (λ x _, small_guesses x)
+         ... ≤ ‖α‖ * (‖α‖ + 1) ^ (‖α‖ - 1) : by simp [card_univ],
 
     rw [all_are_guessed, bUnion_guessed_at_eq_guessed] at univ_large,
     rw univ_large at bUnion_small,
