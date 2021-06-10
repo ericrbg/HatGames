@@ -29,7 +29,8 @@ with `β` colours, and proves bounds from the literature on this area.
 
 open simple_graph
 
-variables {α : Type*} (G : simple_graph α) [decidable_eq α]
+local notation `|` x `|` := finset.card x
+local notation `‖` x `‖` := fintype.card x
 
 /--
 A hat-guessing function is a function that takes in a vertex, and an arrangement of hats, and
@@ -37,11 +38,27 @@ tries to guess its own vertex. It must fit two conditions: first, it can only de
 of vertices that are adjacent to it, and it must also guess correctly on at least one vertex.
 -/
 @[nolint has_inhabited_instance] -- this whole file is dedicated to whether G, β instances exist!
-structure hat_guessing_function (β : Type*) :=
+structure hat_guessing_function {α : Type*} (G : simple_graph α) [decidable_eq α] (β : Type*) :=
 (f : α → (α → β) → β)
-(f_local: ∀ a b : α, ¬G.adj a b → ∀ arr : (α → β), ∀ k : β,
+(f_local': ∀ a b : α, ¬G.adj a b → ∀ arr : (α → β), ∀ k : β,
   f a arr = f a (λ x, if x = b then k else arr x))
-(f_guesses: ∀ arr : (α → β), ∃ a : α, f a arr = arr a)
+(f_guesses': ∀ arr : (α → β), ∃ a : α, f a arr = arr a)
+
+namespace hat_guessing_function
+
+variables {α β γ : Type*} {G : simple_graph α} [decidable_eq α] (hg : hat_guessing_function G β)
+
+
+instance : has_coe_to_fun (hat_guessing_function G β):= ⟨_, f⟩
+
+theorem f_local : ∀ {a b : α}, ¬G.adj a b → ∀ arr : (α → β), ∀ k : β,
+hg a arr = hg a (λ x, if x = b then k else arr x) := hg.f_local'
+
+theorem f_guesses : ∀ arr : (α → β), ∃ a : α, hg a arr = arr a := hg.f_guesses'
+
+@[simp] lemma f_eq_coe : hg.f = hg := rfl
+
+@[simp] lemma coe_mk (h₁ h₂) : ⇑(⟨hg, h₁, h₂⟩ : hat_guessing_function G β) = hg := rfl
 
 section basic
 
@@ -49,47 +66,47 @@ section basic
 If you have a guesser `α → β`, and a function with a right-inverse `f : β → γ`, then
 you can create a guesser `α → γ`.
 -/
-def guesser_of_rinverse {β γ} {G : simple_graph α} (hg : hat_guessing_function G β) (f : β → γ)
-  (g : γ → β) (hf : function.right_inverse g f) : hat_guessing_function G γ :=
-{ f := λ a arr, f $ hg.f a $ g ∘ arr,
-  f_local := begin
-    intros a b nadj_a_b arr k, congr' 1,
-    rw hg.f_local _ _ nadj_a_b _ _,
-    congr' 1, ext, split_ifs with h; simp [h]
+def guesser_of_rinverse {f : β → γ} {g : γ → β} (hf : function.right_inverse g f) :
+hat_guessing_function G γ :=
+{ f := λ a arr, f $ hg a $ g ∘ arr,
+  f_local' := λ _ _ nadj _ _, begin
+    rw hg.f_local nadj,
+    congr,
+    ext,
+    split_ifs with h; simp [h]
   end,
-  f_guesses := λ arr, let ⟨a, ha⟩ := hg.f_guesses (g ∘ arr) in ⟨a, by rw [ha, hf]⟩ }
+  f_guesses' := λ arr, let ⟨a, ha⟩ := hg.f_guesses (g ∘ arr) in ⟨a, by rw [ha, hf]⟩ }
 
 /--
 We replace the right-inverse requirement with a surjection. With axiom of choice, being surjective
 is equivalent to having a right-inverse; however, this means that this definition is non-computable.
 -/
-noncomputable def guesser_of_surjection {β γ} {G : simple_graph α} (hg : hat_guessing_function G β)
-  (f : β → γ) (hf : function.surjective f) : hat_guessing_function G γ
-  := guesser_of_rinverse hg f (function.surj_inv hf) (function.right_inverse_surj_inv hf)
+noncomputable def guesser_of_surjection {f : β → γ} (hf : function.surjective f) :
+hat_guessing_function G γ := hg.guesser_of_rinverse $ function.right_inverse_surj_inv hf
 
 /--
 As expected, if there's a set iso between two types, then guessing on either of them is equivalent.
 -/
-def guesser_of_equiv {β γ} {G : simple_graph α} (hg : hat_guessing_function G β) (h : β ≃ γ)
-:= guesser_of_rinverse hg _ _ h.right_inv
+def guesser_of_equiv (h : β ≃ γ) := hg.guesser_of_rinverse h.right_inv
 
 /-- On an nonempty graph, you can trivially guess 1 colour. -/
 def inhabited_guesser [nonempty α] : hat_guessing_function G unit :=
 { f := λ _ _, unit.star,
-  f_local := λ _ _ _ _ _, rfl,
-  f_guesses := by simp }
+  f_local' := λ _ _ _ _ _, rfl,
+  f_guesses' := by simp }
 
 /--
 On a graph with an edge, you can guess 2 colours. The strategy is to take the two vertices, and
 one vertex guesses that they are the same colour, whilst the other vertex guesses they aren't.
 -/
-def edge_guesser {v w : α} (t : G.adj v w) : hat_guessing_function G bool :=
+def edge_guesser {v w : α} (h : G.adj v w) : hat_guessing_function G bool :=
 { f := λ x arr, if v = x then arr w else (if w = x then !(arr v) else ff),
-  f_local := by {intros, split_ifs; subst_vars; tauto},
-  f_guesses := λ arr, by begin
-    by_cases (arr w = arr v), --split-ifs doesn't work with binders
-      { use v, simpa },
-      { use w, suffices : !arr v = arr w, by simpa [G.ne_of_adj ‹G.adj v w›],
+  f_local' := by intros; split_ifs; subst_vars; tauto,
+  f_guesses' := λ arr, begin
+    by_cases eq : arr w = arr v, --split-ifs doesn't work with binders
+      { use v, simp [eq] },
+      { use w,
+        suffices : !arr v = arr w, by simpa [G.ne_of_adj h],
         cases (arr v); cases (arr w); trivial }
   end }
 
@@ -98,45 +115,40 @@ Subgraphs aren't properly implemented in mathlib yet, but this emulates the mech
 that `(a, b)` is an edge in `G` implies that it is an edge in `H`, then we can clearly use the
 strategy of `G` on `H` to guess the same amount of colours.
 -/
-def simple_subgraph {β} (hg : hat_guessing_function G β) (H : simple_graph α)
-  (h : ∀ a b : α, G.adj a b → H.adj a b) : hat_guessing_function H β :=
-{ f := hg.f,
-  f_local := λ a b nadj, hg.f_local a b $ mt (h a b) nadj,
-  f_guesses := hg.f_guesses }
+def simple_subgraph {H : simple_graph α} (h : ∀ a b : α, G.adj a b → H.adj a b) :
+hat_guessing_function H β :=
+{ f := hg,
+  f_local' := λ a b nadj, hg.f_local $ mt (h a b) nadj,
+  f_guesses' := hg.f_guesses }
 
 end basic
-
-variable {G}
 
 section finite
 
 open finset
 
-local notation `|` x `|` := finset.card x
-local notation `‖` x `‖` := fintype.card x
+variables [fintype β] [fintype γ]
 
 /--
 If two β, γ have equal cardinality, and we have an `hat_guessing_function G β`, then there exists
-a `hat_guessing_function G γ`; however, we cannot computably extract it.
+a `hat_guessing_function G γ`; however, we cannot computably extract it. (This is choice-related;
+how do we pick which guessing function?)
 -/
-lemma exists_equal_cards_guess {β γ} [fintype β] [fintype γ] (h : ‖β‖ = ‖γ‖)
-  (hg : hat_guessing_function G β) : nonempty (hat_guessing_function G γ) :=
+-- TODO: Make a `trunc` version; however, I don't know the API.
+lemma exists_equal_cards_guess (h : ‖β‖ = ‖γ‖) : nonempty (hat_guessing_function G γ) :=
 ⟨guesser_of_equiv hg (fintype.equiv_of_card_eq h)⟩
 
 /--
 The non-computable equivalent to the above statement.
 -/
-noncomputable def equal_cards_guess {β γ} [fintype β] [fintype γ] (h : ‖β‖ = ‖γ‖)
-  (hg : hat_guessing_function G β) : hat_guessing_function G γ :=
-(exists_equal_cards_guess h hg).some
-
-variable [fintype α]
+noncomputable def equal_cards_guess (h : ‖β‖ = ‖γ‖) : hat_guessing_function G γ :=
+(hg.exists_equal_cards_guess h).some
 
 /-- Auxillary lemmata for `max_guess_lt_card_verts`. -/
 lemma size_univ_larger (k : ℕ) : k * (k + 1) ^ (k - 1) < (k + 1) ^ k :=
 begin
   cases k,
-  {norm_num},
+  { norm_num },
   ring_exp,
   simp [mul_two, pos_iff_ne_zero, pow_ne_zero]
 end
@@ -144,7 +156,7 @@ end
 lemma cancel_pow {k n : ℕ} : k * (n + 1) ≤ (n + 1) ^ n → k ≤ (n + 1) ^ (n - 1) :=
 begin
   cases n,
-  {norm_num},
+  { norm_num },
   simp [pow_succ']
 end
 
@@ -153,15 +165,15 @@ For `k` vertices on a graph, you can never guess `k+1` colours. We prove this us
 simple properties of cardinality, and is essentially a reduction of the case on a
 complete graph to all other possible graphs.
 -/
-theorem best_guess_le_card_verts : hat_guessing_function G (option α) → false := begin
+theorem best_guess_le_card_verts [fintype α] : hat_guessing_function G (option α) → false := begin
   intro hg,
-  let guessed_at := λ a, univ.filter (λ arr, hg.f a arr = arr a),
+  let guessed_at := λ a, univ.filter (λ arr, hg a arr = arr a),
 
   have univ_large : |(univ : finset (α → option α))| = (‖α‖ + 1) ^ ‖α‖, by simp [card_univ],
   -- the approach we take here is to show that individual vertices can guess "relatively few"
   -- configurations, but `univ` (the total number of configurations) is larger than that
   suffices small_guesses : ∀ a : α, |guessed_at a| ≤ (‖α‖ + 1) ^ (‖α‖ - 1),
-  { let all_guessed := univ.filter (λ arr, ∃ a : α, hg.f a arr = arr a),
+  { let all_guessed := univ.filter (λ arr, ∃ a : α, hg a arr = arr a),
 
     have all_are_guessed : univ = all_guessed,
       ext arr,
@@ -223,7 +235,7 @@ theorem best_guess_le_card_verts : hat_guessing_function G (option α) → false
     -- If two colourings are the same except at non-connected vertices, and they guess,
     -- then they must be equal. (TODO: May be worth extracting this, it's a useful proof!)
     contrapose! arr1_ne_arr2 with arr3_eq_arr4, funext x,
-    have hg_local := hg.f_local _ _ (G.loopless a),
+    have hg_local := hg.f_local (G.loopless a),
     substs arr3_eq_arr4 arr4_sim_arr2,
     rename arr3_sim_arr1 → arr1_sim_arr2,
     rw [function.funext_iff] at arr1_sim_arr2,
@@ -247,23 +259,23 @@ end finite
 
 section complete
 
-open finset
-
 /--
 Finite complete graphs on `α` have guessing strategies that guess `α` colours. This is a
 natural extension of the 2-player result to any finite commutative group.
 -/
 def complete_guess [fintype α] [add_comm_group α] : hat_guessing_function (complete_graph α) α :=
-{ f := λ k arr, k - ∑ x in univ \ {k}, arr x,
-  f_local := λ a b a_eq_b arr _, by begin
+{ f := λ k arr, k - ∑ x in finset.univ \ {k}, arr x,
+  f_local' := λ a b a_eq_b arr _, begin
     change ¬a ≠ b at a_eq_b, push_neg at a_eq_b, subst a_eq_b,
-    simp [sub_right_inj, sum_ite_of_false]
+    simp [sub_right_inj, finset.sum_ite_of_false]
   end,
-  f_guesses := λ arr, by begin
-    let s := ∑ x in univ, arr x, use s,
-    suffices : s = ∑ x in univ \ {s}, arr x + arr s,
-      nth_rewrite 0 this, simp,
-    rw [←(show _ = arr s, from sum_singleton), sum_sdiff], simp
+  f_guesses' := λ arr, begin
+    let s := ∑ x in finset.univ, arr x,
+    use s,
+    suffices : s = ∑ x in finset.univ \ {s}, arr x + arr s,
+    { nth_rewrite 0 this, abel },
+    rw [←(show _ = arr s, from finset.sum_singleton), finset.sum_sdiff],
+    exact finset.subset_univ _
   end }
 
 end complete
@@ -276,61 +288,62 @@ that the lexicographic product of a graph and a complete graph can create graphs
 hat-guessing strategies.
 -/
 
-variables {β γ : Type*}
-
-open finset
-
 /-
 The next few lines essentially verify what is assumed in the paper. Locality proofs are often
 ignored in the papers as these functions are "clearly" defined to be local; the approach I took
 doesn't have this flexibility, sadly.
 -/
 
-variables [fintype γ] [decidable_eq γ] (hg : hat_guessing_function G β)
+open finset
+
+variables [fintype γ] [decidable_eq γ]
 
 /-- The β part of the lex guessing function. -/
-def guess_β [add_comm_group β] (hg : hat_guessing_function G β) (va : α × γ) (arr : α × γ → β × γ)
-  := (hg.f va.1 (λ x, ∑ m : γ, (arr ⟨x, m⟩).1)) - ∑ m in univ \ {va.2}, (arr ⟨va.1, m⟩).1
+def guess_β [add_comm_group β] (va : α × γ) (arr : α × γ → β × γ)
+  := (hg va.1 (λ x, ∑ m : γ, (arr ⟨x, m⟩).1)) - ∑ m in univ \ {va.2}, (arr ⟨va.1, m⟩).1
 
 /-- The γ part of the lex guessing function. -/
 def guess_γ {α} [add_comm_group γ] (va : α × γ) (arr : α × γ → β × γ) :=
   - (∑ m in univ \ {va.2}, (arr ⟨va.1, m⟩).2) - va.2
 
-lemma guess_β_local [add_comm_group β] (a b : α × γ)
-  (nadj : ¬(G · γ).adj a b) (arr : α × γ → β × γ) (k : β × γ) :
-  guess_β hg a arr = guess_β hg a (λ x, if x = b then k else arr x) :=
+lemma guess_β_local [add_comm_group β] {a b : α × γ}
+  (nadj : ¬(G · γ).adj a b) {arr : α × γ → β × γ} {k : β × γ} :
+  hg.guess_β a arr = hg.guess_β a (λ x, if x = b then k else arr x) :=
 begin
-  unfold guess_β, obtain ⟨v, a⟩ := a, congr' 1;
-
-    -- compile-driven maths; this happens to fit the locality requirement!
-    -- I assume this is what the colour in our fake arrangement "really is"
-    -- but this code may as well be auto-generated
-    let n := ∑ (m : γ), (ite ((b.fst, m) = b) k (arr (b.fst, m))).fst, rw lex_adj at nadj,
-    convert hg.f_local v b.1 (by tauto) (λ (x : α), ∑ (m : γ), (arr (x, m)).fst) n,
-    funext, split_ifs with h, {subst h},
-    -- the rest comes from the lexicographic relations
-    all_goals { rw sum_apply_ite_of_false, tidy }
+  rw guess_β,
+  rw lex_adj at nadj,
+  obtain ⟨v, a⟩ := a,
+  congr' 1,
+  -- we focus on converting the first part of the expression into the right form
+  convert hg.f_local (by tauto) (λ (x : α), ∑ (m : γ), (arr (x, m)).fst) _,
+  funext,
+  split_ifs with h,
+  { subst h }, -- degenerate case of the first part
+  -- the rest comes from the lexicographic relations; we use `all_goals` as the sums are the same
+  all_goals { rw sum_apply_ite_of_false, tidy }
 end
 
-lemma guess_γ_local [add_comm_group γ] (a b : α × γ)
-  (h : ¬(G · γ).adj a b) (arr : α × γ → β × γ) (k : β × γ) :
+lemma guess_γ_local [add_comm_group γ] {a b : α × γ}
+  (h : ¬(G · γ).adj a b) {arr : α × γ → β × γ} {k : β × γ} :
   guess_γ a arr = guess_γ a (λ x, ite (x = b) k (arr x)) :=
-by { unfold guess_γ, congr' 2, rw sum_apply_ite_of_false, tidy }
+by { rw guess_γ, congr' 2, rw sum_apply_ite_of_false, tidy }
 
 /-- Lemma 1 in the Gadouleau paper, generalised to guessing types.  -/
-def blow_up [add_comm_group β] [add_comm_group γ]
-  : hat_guessing_function (G · γ) (β × γ) :=
-{ f := λ va arr, (guess_β hg va arr, guess_γ va arr),
-  f_local := λ a b nadj _ k, by {rw [guess_β_local, guess_γ_local]; exact nadj},
-  f_guesses := begin
-    intro arr, obtain ⟨x, hx⟩ := hg.f_guesses (λ x, ∑ m : γ, (arr ⟨x, m⟩).1),
-    use ⟨x, - ∑ m, (arr ⟨x, m⟩).2⟩, ext,
-      { unfold guess_β, simp only [hx],
-        have : ∑ m in _, (arr (x, m)).fst = (arr (x, -∑ m, (arr (x, m)).snd)).fst := sum_singleton,
-        rw [sub_eq_iff_eq_add', ←this, sum_sdiff], simp },
-      unfold guess_γ, simp only [neg_sub_neg],
-      have : ∑ m in _, (arr (x, m)).snd = (arr (x, -∑ m, (arr (x, m)).snd)).snd := sum_singleton,
-      rw [←this, sub_eq_iff_eq_add', sum_sdiff], simp,
+def blow_up [add_comm_group β] [add_comm_group γ] : hat_guessing_function (G · γ) (β × γ) :=
+{ f := λ va arr, (hg.guess_β va arr, guess_γ va arr),
+  f_local' := λ a b nadj _ k, by rw [hg.guess_β_local nadj, guess_γ_local nadj],
+  f_guesses' := λ arr, begin
+    obtain ⟨x, hx⟩ := hg.f_guesses (λ x, ∑ m : γ, (arr ⟨x, m⟩).1),
+    use ⟨x, -∑ m, (arr ⟨x, m⟩).2⟩,
+    ext,
+      { have : ∑ m in _, (arr (x, m)).fst = _ := sum_singleton,
+        rw [guess_β, hx, sub_eq_iff_eq_add', ←this, sum_sdiff],
+        simp },
+      have : ∑ m in _, (arr (x, m)).snd = _ := sum_singleton,
+      rw [guess_γ, neg_sub_neg, ←this, sub_eq_iff_eq_add', sum_sdiff],
+      simp
   end }
 
 end lexicographic
+
+end hat_guessing_function

@@ -10,5 +10,5 @@ def lex_product (β) : simple_graph (α × β) :=
 
 infix `·`:50 := lex_product
 
-@[simp] theorem lex_adj {G} (a b : α × β) : (G·β).adj a b ↔ G.adj a.1 b.1 ∨ (a.1 = b.1 ∧ a.2 ≠ b.2)
+@[simp] theorem lex_adj {G} {a b : α × β} : (G·β).adj a b ↔ G.adj a.1 b.1 ∨ (a.1 = b.1 ∧ a.2 ≠ b.2)
   := iff.rfl
