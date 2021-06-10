@@ -48,7 +48,6 @@ namespace hat_guessing_function
 
 variables {α β γ : Type*} {G : simple_graph α} [decidable_eq α] (hg : hat_guessing_function G β)
 
-
 instance : has_coe_to_fun (hat_guessing_function G β):= ⟨_, f⟩
 
 theorem f_local : ∀ {a b : α}, ¬G.adj a b → ∀ arr : (α → β), ∀ k : β,
@@ -252,7 +251,7 @@ theorem best_guess_le_card_verts [fintype α] : hat_guessing_function G (option 
   have less_than_card_univ : |(guessed_at a).bUnion similar_arrs| ≤ (‖α‖ + 1) ^ ‖α‖,
     by simpa only [←univ_large, card_univ] using card_le_univ _,
 
-  exact (cancel_pow $ (at_most_similar).trans less_than_card_univ),
+  exact cancel_pow (at_most_similar.trans less_than_card_univ)
 end
 
 end finite
