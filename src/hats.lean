@@ -32,6 +32,14 @@ open simple_graph
 local notation `|` x `|` := finset.card x
 local notation `‖` x `‖` := fintype.card x
 
+section to_move
+
+lemma simple_graph.subgraph.adj_sub' {α} {G: simple_graph α} (G' : subgraph G) {u v : G'.verts}
+  (h : ¬G.adj u v) : ¬G'.adj u v :=
+by { apply mt, apply G'.adj_sub, exact h }
+
+end to_move
+
 /--
 A hat-guessing function is a function that takes in a vertex, and an arrangement of hats, and
 tries to guess its own vertex. It must fit two conditions: first, it can only depend on the values
@@ -59,6 +67,10 @@ theorem f_guesses : ∀ arr : (α → β), ∃ a : α, hg a arr = arr a := hg.f_
 
 @[simp] lemma coe_mk (h₁ h₂) : ⇑(⟨hg, h₁, h₂⟩ : hat_guessing_function G β) = hg := rfl
 
+def elim' (h : is_empty α) {C} : C := (is_empty.exists_iff.mp $ hg.f_guesses is_empty_elim).elim
+
+def elim [h : is_empty α] {C} : C := elim' hg h
+
 section basic
 
 /--
@@ -84,7 +96,7 @@ noncomputable def guesser_of_surjection {f : β → γ} (hf : function.surjectiv
 hat_guessing_function G γ := hg.guesser_of_rinverse $ function.right_inverse_surj_inv hf
 
 /--
-As expected, if there's a set iso between two types, then guessing on either of them is equivalent.
+If there's an isomorphism between two types, then guessing on either of them is equivalent.
 -/
 def guesser_of_equiv (h : β ≃ γ) := hg.guesser_of_rinverse h.right_inv
 
@@ -102,18 +114,40 @@ def edge_guesser {v w : α} (h : G.adj v w) : hat_guessing_function G bool :=
 { f := λ x arr, if v = x then arr w else (if w = x then !(arr v) else ff),
   f_local' := by intros; split_ifs; subst_vars; tauto,
   f_guesses' := λ arr, begin
-    by_cases eq : arr w = arr v, --split-ifs doesn't work with binders
-      { use v, simp [eq] },
-      { use w,
-        suffices : !arr v = arr w, by simpa [G.ne_of_adj h],
-        cases (arr v); cases (arr w); trivial }
+    obtain hwv | hwv := eq_or_ne (arr v) (arr w),
+    { exact ⟨v, by simp [hwv]⟩ },
+    { use w,
+      suffices : !arr v = arr w, by simpa [G.ne_of_adj h],
+      cases (arr v); cases (arr w); trivial }
   end }
 
 /--
 Subgraphs are now implemented in mathlib! You can transfer a β-guessing strategy from a subgraph.
 -/
-def hat_guessing_function.of_subgraph {H : subgraph G}
-  (hg : hat_guessing_function H.spanning_coe β) : hat_guessing_function G β :=
+def of_subgraph {H : subgraph G} [decidable_pred (∈ H.verts)] [inhabited β]
+  (hg : hat_guessing_function H.coe β) : hat_guessing_function G β :=
+{ f := λ v arr, if hv : v ∈ H.verts then hg ⟨v, hv⟩ (λ v, arr v)
+                else default β, -- we need this to pick an "independent" choice of β.
+  f_local' := λ a b nadj arr x, begin
+    split_ifs with ha,
+    { by_cases hb : b ∈ H.verts,
+      { change ¬G.adj (⟨a, ha⟩ : H.verts) (⟨b, hb⟩ : H.verts) at nadj,
+        convert hg.f_local (H.adj_sub' nadj) (λ v, arr v) x,
+        exact funext (λ ⟨x, ha⟩, by simp) },
+      congr,
+      funext x,
+      suffices : b ≠ x, by simp [this.symm],
+      rintro rfl,
+      exact hb x.prop },
+    refl
+  end,
+  f_guesses' := λ arr, let ⟨a, ha⟩ := hg.f_guesses (λ v, arr v) in ⟨a, by simpa using ha⟩ }
+
+/--
+An alternative version of `of_subgraph` using `spanning_coe`.
+-/
+def of_subgraph' {H : subgraph G} (hg : hat_guessing_function H.spanning_coe β) :
+  hat_guessing_function G β :=
 { f := hg,
   f_local' := λ a b nadj, hg.f_local $ mt (λ h, H.adj_sub h) nadj,
   f_guesses' := hg.f_guesses }
