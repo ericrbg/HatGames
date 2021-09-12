@@ -1,8 +1,8 @@
 [package]
 name = "HatGames"
 version = "0.1"
-lean_version = "leanprover-community/lean:3.30.0"
+lean_version = "leanprover-community/lean:3.32.1"
 path = "src"
 
 [dependencies]
-mathlib = {git = "https://github.com/leanprover-community/mathlib", rev = "0f8e79ea037a9193b9fa246c8601a580ffdb70a3"}
+mathlib = {git = "https://github.com/leanprover-community/mathlib", rev = "c0693ca02583a2f872b46b7a0b397199c49226c3"}
