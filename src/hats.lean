@@ -1,4 +1,4 @@
-import combinatorics.simple_graph.basic
+import combinatorics.simple_graph.subgraph
 import algebra.big_operators.order
 import data.fintype.card
 import .constructions
@@ -110,14 +110,12 @@ def edge_guesser {v w : α} (h : G.adj v w) : hat_guessing_function G bool :=
   end }
 
 /--
-Subgraphs aren't properly implemented in mathlib yet, but this emulates the mechanism. If you have
-that `(a, b)` is an edge in `G` implies that it is an edge in `H`, then we can clearly use the
-strategy of `G` on `H` to guess the same amount of colours.
+Subgraphs are now implemented in mathlib! You can transfer a β-guessing strategy from a subgraph.
 -/
-def simple_subgraph {H : simple_graph α} (h : ∀ a b : α, G.adj a b → H.adj a b) :
-hat_guessing_function H β :=
+def hat_guessing_function.of_subgraph {H : subgraph G}
+  (hg : hat_guessing_function H.spanning_coe β) : hat_guessing_function G β :=
 { f := hg,
-  f_local' := λ a b nadj, hg.f_local $ mt (h a b) nadj,
+  f_local' := λ a b nadj, hg.f_local $ mt (λ h, H.adj_sub h) nadj,
   f_guesses' := hg.f_guesses }
 
 end basic
@@ -240,7 +238,7 @@ theorem best_guess_le_card_verts [fintype α] : hat_guessing_function G (option 
     rw [function.funext_iff] at arr1_sim_arr2,
     funext x,
 
-    obtain rfl | h := em (x = a), -- `split-ifs` would be nice, but throws away too much information
+    obtain rfl | h := eq_or_ne x a, -- `split-ifs` would be nice, but throws away too much information
     { simp only [true_and, mem_filter, mem_univ] at arr1guessed arr2guessed,
       rw [←arr1guessed, ←arr2guessed, hg_local arr1 k, hg_local arr2 m],
       simp_rw λ t, arr1_sim_arr2 t },
@@ -258,24 +256,17 @@ end finite
 
 section complete
 
+open finset
+
 /--
 Finite complete graphs on `α` have guessing strategies that guess `α` colours. This is a
 natural extension of the 2-player result to any finite commutative group.
 -/
 def complete_guess [fintype α] [add_comm_group α] : hat_guessing_function (complete_graph α) α :=
-{ f := λ k arr, k - ∑ x in finset.univ \ {k}, arr x,
-  f_local' := λ a b a_eq_b arr _, begin
-    change ¬a ≠ b at a_eq_b, push_neg at a_eq_b, subst a_eq_b,
-    simp [sub_right_inj, finset.sum_ite_of_false]
-  end,
-  f_guesses' := λ arr, begin
-    let s := ∑ x in finset.univ, arr x,
-    use s,
-    suffices : s = ∑ x in finset.univ \ {s}, arr x + arr s,
-    { nth_rewrite 0 this, abel },
-    rw [←(show _ = arr s, from finset.sum_singleton), finset.sum_sdiff],
-    exact finset.subset_univ _
-  end }
+{ f := λ k arr, k - ∑ x in univ \ {k}, arr x,
+  f_local' := λ a b hab arr _, by simp [sub_right_inj, sum_ite_of_false, not_not.mp hab],
+  f_guesses' := λ arr, ⟨∑ x in univ, arr x,
+  by rw [←@sum_singleton _ _ (finset.sum _ _) arr, sub_eq_iff_eq_add', sum_sdiff (subset_univ _)]⟩ }
 
 end complete
 

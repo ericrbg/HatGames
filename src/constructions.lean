@@ -7,10 +7,13 @@ variables {α β : Type*} (G : simple_graph α)
 graph lexicographic product on `G` and the complete graph for `β`. -/
 def lex_product (β) : simple_graph (α × β) :=
 { adj := λ a b, G.adj a.1 b.1 ∨ (a.1 = b.1 ∧ a.2 ≠ b.2),
-  sym := by { rintros _ _ (_|⟨_,_⟩); tauto },
+  symm := by { rintros _ _ (_|⟨_,_⟩); tauto },
   loopless := λ x , by { have := G.loopless x.fst, rintros (_ | _); tauto } }
 
 infix `·`:50 := lex_product
 
-@[simp] theorem lex_adj {G} {a b : α × β} : (G·β).adj a b ↔ G.adj a.1 b.1 ∨ (a.1 = b.1 ∧ a.2 ≠ b.2)
-  := iff.rfl
+@[simp] theorem lex_adj {G} {a b : α × β} :
+  (G·β).adj a b ↔ G.adj a.1 b.1 ∨ (a.1 = b.1 ∧ a.2 ≠ b.2) := iff.rfl
+
+theorem lex_adj' {G} {a₁ a₂ : α} {b₁ b₂ : β} :
+  (G·β).adj ⟨a₁, b₁⟩ ⟨a₂, b₂⟩ ↔ G.adj a₁ a₂ ∨ (a₁ = a₂ ∧ b₁ ≠ b₂) := iff.rfl
