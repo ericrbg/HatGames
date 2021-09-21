@@ -32,14 +32,6 @@ open simple_graph
 local notation `|` x `|` := finset.card x
 local notation `‖` x `‖` := fintype.card x
 
-section to_move
-
-lemma simple_graph.subgraph.adj_sub' {α} {G: simple_graph α} (G' : subgraph G) {u v : G'.verts}
-  (h : ¬G.adj u v) : ¬G'.adj u v :=
-by { apply mt, apply G'.adj_sub, exact h }
-
-end to_move
-
 /--
 A hat-guessing function is a function that takes in a vertex, and an arrangement of hats, and
 tries to guess its own vertex. It must fit two conditions: first, it can only depend on the values
@@ -132,7 +124,7 @@ def of_subgraph {H : subgraph G} [decidable_pred (∈ H.verts)] [inhabited β]
     split_ifs with ha,
     { by_cases hb : b ∈ H.verts,
       { change ¬G.adj (⟨a, ha⟩ : H.verts) (⟨b, hb⟩ : H.verts) at nadj,
-        convert hg.f_local (H.adj_sub' nadj) (λ v, arr v) x,
+        convert hg.f_local (mt (subgraph.adj_sub H) nadj) (λ v, arr v) x,
         exact funext (λ ⟨x, ha⟩, by simp) },
       congr,
       funext x,
